@@ -4,7 +4,7 @@
 
 A simple Mac utility that forces iCloud Messages to keep syncing. Inspired by Desmond Hume from *Lost*, who pushed the button every 108 minutes to save the world.
 
-Except this Desmond pushes every 15 seconds.
+Except Desmond pushes every 15 seconds.
 
 ---
 
