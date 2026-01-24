@@ -2,19 +2,17 @@
 
 **"We have to push the button."**
 
-A simple Mac utility that forces iCloud Messages to keep syncing. Inspired by Desmond Hume from *Lost*, who pushed the button every 108 minutes to save the world.
+A Mac toolkit that forces iCloud Messages to sync, then exports your texts to files you can use with Claude AI. Inspired by Desmond Hume from *Lost*, who pushed the button every 108 minutes to save the world.
 
-Except Desmond pushes every 15 seconds.
+Except this Desmond pushes every 15 seconds.
 
 ---
 
-## What It Does
+## What's Included
 
-If you've ever tried to sync your full iMessage history to a Mac via iCloud, you know the pain. Apple's sync loves to pause, stall, and give up randomly.
+**desmond.sh** — Forces iCloud Messages to keep syncing by clicking "Sync Now" every 15 seconds. Reports your message count every 3 minutes.
 
-Desmond fixes that by:
-- Clicking the "Sync Now" button in Messages settings every 15 seconds
-- Reporting your message count every 3 minutes so you can watch it climb
+**imessage_exporter.py** — Exports your messages to clean markdown files, organized by contact and date. Runs automatically every hour once set up.
 
 **This runs locally on your Mac. Nothing is uploaded anywhere.**
 
@@ -24,8 +22,8 @@ Desmond fixes that by:
 
 - macOS
 - Messages in iCloud enabled (on both iPhone and Mac)
-- Terminal with **Accessibility** permissions (so it can click the button)
-- Terminal with **Full Disk Access** (so it can count your messages)
+- Terminal with **Full Disk Access** (to read your messages)
+- Terminal with **Accessibility** permissions (to click the Sync Now button)
 
 ---
 
@@ -41,7 +39,11 @@ Desmond fixes that by:
 - System Settings → Privacy & Security → Accessibility
 - Click + → Add Terminal
 
-### 2. Download and run
+Restart Terminal after granting permissions.
+
+### 2. Force your messages to sync
+
+If your iCloud Messages sync keeps pausing or stalling:
 
 ```bash
 cd ~/Downloads
@@ -49,15 +51,65 @@ chmod +x desmond.sh
 ./desmond.sh
 ```
 
-You'll see Desmond start pushing the button and reporting your message count.
+Leave it running until your message count stops climbing. Press `Control + C` to stop.
 
-### 3. Stop it
+### 3. Export your messages
 
-Press `Control + C` in Terminal when your sync is complete.
+Once your messages are synced, run the exporter:
+
+```bash
+python3 imessage_exporter.py --full
+```
+
+Your messages will be saved to:
+
+```
+~/Downloads/iMessages_Export/
+├── INDEX.md                    # Overview of all conversations
+├── John Smith/
+│   ├── 2024-01-15.md
+│   ├── 2024-01-16.md
+│   └── ...
+├── Mom/
+│   ├── 2023-12-25.md
+│   └── ...
+└── ...
+```
+
+Each markdown file contains your conversation for that day, formatted like:
+
+```
+# Messages with John Smith - 2024-01-15
+
+**09:32 - John Smith:** Hey, are we still on for lunch?
+
+**09:35 - Me:** Yeah, noon works. Same place?
+```
+
+### 4. Set up automatic exports (optional)
+
+To export new messages every hour automatically:
+
+```bash
+chmod +x setup_imessage_exporter.sh
+./setup_imessage_exporter.sh
+```
+
+This installs a background job that runs hourly.
 
 ---
 
-## Example Output
+## Using with Claude
+
+Once exported, you can:
+
+- Upload specific conversation files to Claude for context
+- Upload `INDEX.md` to show Claude what conversations exist
+- Search the export folder locally, then share relevant files
+
+---
+
+## Example Output (desmond.sh)
 
 ```
   ██████╗ ███████╗███████╗███╗   ███╗ ██████╗ ███╗   ██╗██████╗ 
