@@ -36,7 +36,14 @@ Open **System Settings → Privacy & Security** and add Terminal to:
 
 - **Full Disk Access** (to read messages)
 - **Accessibility** (to click Sync Now)
-- **Contacts** (to look up names)
+
+**For Contacts access**, the permission screen may be blank until an app requests it. Run this in Terminal to trigger the prompt:
+
+```bash
+osascript -e 'tell application "Contacts" to get name of first person'
+```
+
+Click **OK** when the popup appears. Then Terminal will show up in Privacy & Security → Contacts.
 
 Restart Terminal after granting permissions.
 
