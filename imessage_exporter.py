@@ -8,7 +8,7 @@ import sqlite3
 import os
 import json
 import re
-import glob
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from collections import defaultdict
@@ -22,70 +22,80 @@ STATE_FILE = os.path.expanduser("~/Downloads/iMessages_Export/.export_state.json
 CONTACTS_CACHE = {}
 
 def load_contacts():
-    """Load contacts from the Mac AddressBook database."""
+    """Load contacts using AppleScript (most reliable on modern macOS)."""
     global CONTACTS_CACHE
     
-    # Find the AddressBook database
-    ab_path = os.path.expanduser("~/Library/Application Support/AddressBook/Sources/")
-    db_files = glob.glob(os.path.join(ab_path, "*/AddressBook-v22.abcddb"))
+    print("Loading contacts...")
     
-    if not db_files:
-        # Try alternative location
-        ab_path = os.path.expanduser("~/Library/Application Support/AddressBook/")
-        db_files = glob.glob(os.path.join(ab_path, "AddressBook-v22.abcddb"))
-    
-    if not db_files:
-        print("Note: Could not find Contacts database. Using phone numbers/emails instead.")
-        return
+    # AppleScript to get all contacts with phone numbers and emails
+    script = '''
+    set output to ""
+    tell application "Contacts"
+        repeat with p in people
+            set personName to ""
+            try
+                set personName to (first name of p as string) & " " & (last name of p as string)
+            on error
+                try
+                    set personName to (first name of p as string)
+                on error
+                    try
+                        set personName to (last name of p as string)
+                    end try
+                end try
+            end try
+            
+            if personName is not "" then
+                -- Get phone numbers
+                repeat with ph in phones of p
+                    set output to output & personName & "|PHONE|" & (value of ph as string) & "\n"
+                end repeat
+                
+                -- Get emails
+                repeat with em in emails of p
+                    set output to output & personName & "|EMAIL|" & (value of em as string) & "\n"
+                end repeat
+            end if
+        end repeat
+    end tell
+    return output
+    '''
     
     try:
-        conn = sqlite3.connect(db_files[0])
-        cursor = conn.cursor()
+        result = subprocess.run(
+            ['osascript', '-e', script],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
         
-        # Get phone numbers with contact names
-        cursor.execute("""
-            SELECT 
-                ZABCDRECORD.ZFIRSTNAME,
-                ZABCDRECORD.ZLASTNAME,
-                ZABCDPHONENUMBER.ZFULLNUMBER
-            FROM ZABCDRECORD
-            LEFT JOIN ZABCDPHONENUMBER ON ZABCDRECORD.Z_PK = ZABCDPHONENUMBER.ZOWNER
-            WHERE ZABCDPHONENUMBER.ZFULLNUMBER IS NOT NULL
-        """)
-        
-        for row in cursor.fetchall():
-            first_name, last_name, phone = row
-            name_parts = [p for p in [first_name, last_name] if p]
-            if name_parts and phone:
-                # Normalize phone number (remove all non-digits)
-                normalized_phone = re.sub(r'\D', '', phone)
-                # Store with last 10 digits as key (handles country code variations)
-                if len(normalized_phone) >= 10:
-                    CONTACTS_CACHE[normalized_phone[-10:]] = " ".join(name_parts)
-                CONTACTS_CACHE[normalized_phone] = " ".join(name_parts)
-        
-        # Get email addresses with contact names
-        cursor.execute("""
-            SELECT 
-                ZABCDRECORD.ZFIRSTNAME,
-                ZABCDRECORD.ZLASTNAME,
-                ZABCDEMAILADDRESS.ZADDRESS
-            FROM ZABCDRECORD
-            LEFT JOIN ZABCDEMAILADDRESS ON ZABCDRECORD.Z_PK = ZABCDEMAILADDRESS.ZOWNER
-            WHERE ZABCDEMAILADDRESS.ZADDRESS IS NOT NULL
-        """)
-        
-        for row in cursor.fetchall():
-            first_name, last_name, email = row
-            name_parts = [p for p in [first_name, last_name] if p]
-            if name_parts and email:
-                CONTACTS_CACHE[email.lower()] = " ".join(name_parts)
-        
-        conn.close()
-        print(f"Loaded {len(CONTACTS_CACHE)} contact mappings.")
-        
+        if result.returncode == 0:
+            for line in result.stdout.strip().split('\n'):
+                if '|' in line:
+                    parts = line.split('|')
+                    if len(parts) >= 3:
+                        name = parts[0].strip()
+                        contact_type = parts[1]
+                        value = parts[2].strip()
+                        
+                        if contact_type == 'PHONE':
+                            # Normalize phone number
+                            normalized = re.sub(r'\D', '', value)
+                            if len(normalized) >= 10:
+                                CONTACTS_CACHE[normalized[-10:]] = name
+                            CONTACTS_CACHE[normalized] = name
+                        elif contact_type == 'EMAIL':
+                            CONTACTS_CACHE[value.lower()] = name
+            
+            print(f"Loaded {len(CONTACTS_CACHE)} contact mappings.")
+        else:
+            print(f"Note: Could not access Contacts app. Using phone numbers/emails instead.")
+            print(f"      (You may need to grant Terminal access to Contacts)")
+            
+    except subprocess.TimeoutExpired:
+        print("Note: Contacts lookup timed out. Using phone numbers/emails instead.")
     except Exception as e:
-        print(f"Note: Could not read Contacts database ({e}). Using phone numbers/emails instead.")
+        print(f"Note: Could not read contacts ({e}). Using phone numbers/emails instead.")
 
 def lookup_contact_name(identifier):
     """Look up a contact name from phone number or email."""

@@ -24,6 +24,7 @@ Except this Desmond pushes every 15 seconds.
 - Messages in iCloud enabled (on both iPhone and Mac)
 - Terminal with **Full Disk Access** (to read your messages)
 - Terminal with **Accessibility** permissions (to click the Sync Now button)
+- Terminal with **Contacts** access (to show names instead of phone numbers)
 
 ---
 
@@ -31,13 +32,11 @@ Except this Desmond pushes every 15 seconds.
 
 ### 1. Grant Terminal permissions
 
-**Full Disk Access:**
-- System Settings → Privacy & Security → Full Disk Access
-- Click + → Add Terminal (in Applications → Utilities)
+Open **System Settings → Privacy & Security** and add Terminal to:
 
-**Accessibility:**
-- System Settings → Privacy & Security → Accessibility
-- Click + → Add Terminal
+- **Full Disk Access** (to read messages)
+- **Accessibility** (to click Sync Now)
+- **Contacts** (to look up names)
 
 Restart Terminal after granting permissions.
 
@@ -51,7 +50,18 @@ chmod +x desmond.sh
 ./desmond.sh
 ```
 
-Leave it running until your message count stops climbing. Press `Control + C` to stop.
+Desmond will:
+- Click Sync Now every 15 seconds
+- Show you how many new messages arrived
+- Automatically stop when no new messages arrive for ~1 minute
+
+**Optional:** If you know how many messages you have (check iPhone → Settings → [Your Name] → iCloud → Messages), you can set a target:
+
+```bash
+./desmond.sh 344254
+```
+
+Desmond will stop when it reaches that number.
 
 ### 3. Export your messages
 
@@ -122,13 +132,24 @@ Once exported, you can:
   "We have to push the button."
   "4 8 15 16 23 42"
 
-[15:44:08] Push #1 - "I'll see you in another life, brother."
-[15:44:23] Push #2 - "I'll see you in another life, brother."
+[15:44:08] ====== STARTING ======
+[15:44:08] Messages on Mac: 142847
+[15:44:08] Conversations: 89
+[15:44:08] ========================
+
+[15:44:23] Push #2 - +312 new messages (total: 143159)
+[15:44:38] Push #3 - +287 new messages (total: 143446)
 ...
-[15:47:08] ====== THE NUMBERS ======
-[15:47:08] Messages on Mac: 142847
-[15:47:08] Conversations: 89
-[15:47:08] ===========================
+[15:52:08] Push #31 - No new messages (check 1/4)
+[15:52:23] Push #32 - No new messages (check 2/4)
+[15:52:38] Push #33 - No new messages (check 3/4)
+[15:52:53] Push #34 - No new messages (check 4/4)
+
+[15:52:53] ====== SYNC APPEARS COMPLETE ======
+[15:52:53] No new messages for 4 checks.
+[15:52:53] Final count: 344254 messages in 127 conversations
+
+[15:52:53] "See you in another life, brother."
 ```
 
 ---

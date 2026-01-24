@@ -6,7 +6,7 @@
 # Inspired by Desmond Hume from Lost, who pushed the button
 # every 108 minutes to save the world.
 #
-# This Desmond pushes Sync Now every 15 seconds to save your messages.
+# This Desmond pushes Sync Now to save your messages — but only if needed.
 #
 # To stop it: press Control + C
 #
@@ -22,22 +22,81 @@ echo ""
 echo "  \"We have to push the button.\""
 echo "  \"4 8 15 16 23 42\""
 echo ""
-echo "  Pushing Sync Now every 15 seconds."
-echo "  Message count check every 3 minutes."
-echo ""
-echo "  Press Control + C to stop (but then who will save the world?)"
+
+# Check if target was provided
+TARGET_MESSAGES=$1
+if [ -n "$TARGET_MESSAGES" ]; then
+    echo "  Target: $TARGET_MESSAGES messages"
+    echo ""
+fi
+
+echo "  Press Control + C to stop."
 echo ""
 
 count=0
+last_msg_count=0
+stall_count=0
+MAX_STALLS=4  # Stop after 4 checks (~12 min) with no new messages
 
 while true; do
     count=$((count + 1))
     timestamp=$(date "+%H:%M:%S")
     
-    echo "[$timestamp] Push #$count - \"I'll see you in another life, brother.\""
+    # Get current message count
+    current_msg_count=$(sqlite3 ~/Library/Messages/chat.db "SELECT COUNT(*) FROM message;" 2>/dev/null)
+    conv_count=$(sqlite3 ~/Library/Messages/chat.db "SELECT COUNT(DISTINCT chat_id) FROM chat_message_join;" 2>/dev/null)
+    
+    # First run - just record the count
+    if [ $count -eq 1 ]; then
+        echo "[$timestamp] ====== STARTING ======"
+        echo "[$timestamp] Messages on Mac: $current_msg_count"
+        echo "[$timestamp] Conversations: $conv_count"
+        if [ -n "$TARGET_MESSAGES" ]; then
+            remaining=$((TARGET_MESSAGES - current_msg_count))
+            echo "[$timestamp] Remaining: ~$remaining messages"
+        fi
+        echo "[$timestamp] ========================"
+        echo ""
+        last_msg_count=$current_msg_count
+    fi
+    
+    # Check if we've hit target
+    if [ -n "$TARGET_MESSAGES" ] && [ "$current_msg_count" -ge "$TARGET_MESSAGES" ]; then
+        echo ""
+        echo "[$timestamp] ====== SYNC COMPLETE ======"
+        echo "[$timestamp] Reached target: $current_msg_count messages"
+        echo "[$timestamp] \"See you in another life, brother.\""
+        echo ""
+        exit 0
+    fi
+    
+    # Check if messages are still growing
+    if [ "$current_msg_count" -gt "$last_msg_count" ]; then
+        new_msgs=$((current_msg_count - last_msg_count))
+        echo "[$timestamp] Push #$count - +$new_msgs new messages (total: $current_msg_count)"
+        stall_count=0
+        last_msg_count=$current_msg_count
+    else
+        stall_count=$((stall_count + 1))
+        echo "[$timestamp] Push #$count - No new messages (check $stall_count/$MAX_STALLS)"
+        
+        if [ $stall_count -ge $MAX_STALLS ]; then
+            echo ""
+            echo "[$timestamp] ====== SYNC APPEARS COMPLETE ======"
+            echo "[$timestamp] No new messages for $MAX_STALLS checks."
+            echo "[$timestamp] Final count: $current_msg_count messages in $conv_count conversations"
+            echo ""
+            echo "[$timestamp] If this seems low, run again with your target:"
+            echo "[$timestamp]   ./desmond.sh 344254"
+            echo ""
+            echo "[$timestamp] \"See you in another life, brother.\""
+            echo ""
+            exit 0
+        fi
+    fi
     
     # Click the Sync Now button
-    osascript <<EOF
+    osascript <<EOF 2>/dev/null
         tell application "Messages" to activate
         delay 0.3
         tell application "System Events"
@@ -52,16 +111,17 @@ while true; do
         end tell
 EOF
     
-    # Every 12 cycles (3 minutes), check message count
+    # Every 12 cycles (3 minutes), show detailed status
     if [ $((count % 12)) -eq 0 ]; then
         echo ""
         echo "[$timestamp] ====== THE NUMBERS ======"
-        
-        msg_count=$(sqlite3 ~/Library/Messages/chat.db "SELECT COUNT(*) FROM message;" 2>/dev/null)
-        conv_count=$(sqlite3 ~/Library/Messages/chat.db "SELECT COUNT(DISTINCT chat_id) FROM chat_message_join;" 2>/dev/null)
-        
-        echo "[$timestamp] Messages on Mac: $msg_count"
+        echo "[$timestamp] Messages on Mac: $current_msg_count"
         echo "[$timestamp] Conversations: $conv_count"
+        if [ -n "$TARGET_MESSAGES" ]; then
+            remaining=$((TARGET_MESSAGES - current_msg_count))
+            pct=$((current_msg_count * 100 / TARGET_MESSAGES))
+            echo "[$timestamp] Progress: $pct% (~$remaining remaining)"
+        fi
         echo "[$timestamp] ==========================="
         echo ""
     fi
