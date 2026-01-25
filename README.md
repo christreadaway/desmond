@@ -10,9 +10,13 @@ Except this Desmond pushes every 15 seconds.
 
 ## What's Included
 
-**desmond.sh** — Forces iCloud Messages to keep syncing by clicking "Sync Now" every 15 seconds. Reports your message count every 3 minutes.
+**desmond.sh** — Forces iCloud Messages to keep syncing by clicking "Sync Now" every 15 seconds. Reports your message count every 3 minutes. Automatically stops when sync is complete.
 
-**imessage_exporter.py** — Exports your messages to clean markdown files, organized by contact and date. Runs automatically every hour once set up.
+**imessage_exporter.py** — Exports your messages to AI-ready formats:
+- `messages.json` — Structured data with timestamps, metadata, everything Claude needs for deep analysis
+- `messages.csv` — Tabular format for spreadsheets or filtering
+- `SUMMARY.md` — Quick stats and top conversations
+- Individual markdown folders — Human-readable, organized by contact and date
 
 **This runs locally on your Mac. Nothing is uploaded anywhere.**
 
@@ -82,16 +86,28 @@ Your messages will be saved to:
 
 ```
 ~/Downloads/iMessages_Export/
+├── messages.json               # Full structured data for AI analysis
+├── messages.csv                # Tabular format for spreadsheets
+├── SUMMARY.md                  # Quick stats and top conversations
 ├── INDEX.md                    # Overview of all conversations
 ├── John Smith/
 │   ├── 2024-01-15.md
-│   ├── 2024-01-16.md
-│   └── ...
-├── Mom/
-│   ├── 2023-12-25.md
 │   └── ...
 └── ...
 ```
+
+**What's in the AI-ready files:**
+
+Each message includes:
+- `timestamp` — ISO format for precise time analysis
+- `date`, `time`, `year`, `month`, `day`, `hour`
+- `day_of_week` — Monday, Tuesday, etc.
+- `conversation` — Contact or group name
+- `conversation_type` — "direct" or "group"
+- `sender` — Who sent the message
+- `is_from_me` — true/false
+- `text` — Message content
+- `char_count`, `word_count` — For analysis
 
 Each markdown file contains your conversation for that day, formatted like:
 
@@ -118,11 +134,20 @@ This installs a background job that runs hourly.
 
 ## Using with Claude
 
-Once exported, you can:
+**For analysis and insights:**
+- Upload `messages.json` — Claude can analyze patterns, frequency, relationships, timing, who you talk to most, sentiment, etc.
+- Upload `SUMMARY.md` — Quick overview when you just need context
 
-- Upload specific conversation files to Claude for context
-- Upload `INDEX.md` to show Claude what conversations exist
-- Search the export folder locally, then share relevant files
+**For specific conversations:**
+- Upload markdown files from individual contact folders
+- Upload `messages.csv` and ask Claude to filter to specific contacts
+
+**Example prompts:**
+- "Who do I text the most?"
+- "What time of day am I most active?"
+- "Show me my messaging patterns over the last year"
+- "Find all messages where I discussed [topic]"
+- "What are the themes in my conversations with [person]?"
 
 ---
 

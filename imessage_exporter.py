@@ -143,6 +143,43 @@ def get_contact_name(handle_id, cursor):
         return lookup_contact_name(result[0])
     return "Unknown"
 
+def get_chat_participants(chat_id, cursor):
+    """Get participant names for a group chat."""
+    # First get the chat ROWID from the chat_identifier
+    cursor.execute("SELECT ROWID FROM chat WHERE chat_identifier = ?", (chat_id,))
+    chat_row = cursor.fetchone()
+    if not chat_row:
+        return None
+    
+    chat_rowid = chat_row[0]
+    
+    # Get all handles (participants) for this chat
+    cursor.execute("""
+        SELECT handle.id 
+        FROM handle 
+        JOIN chat_handle_join ON handle.ROWID = chat_handle_join.handle_id
+        WHERE chat_handle_join.chat_id = ?
+    """, (chat_rowid,))
+    
+    participants = []
+    for row in cursor.fetchall():
+        handle_id = row[0]
+        name = lookup_contact_name(handle_id)
+        # Only add if we got a real name (not the phone number back)
+        if name and name != handle_id:
+            participants.append(name)
+        elif name:
+            # Got phone number back, abbreviate it
+            participants.append(name[-4:] if len(name) > 4 else name)
+    
+    if participants:
+        # Limit to first 3 names to keep folder names reasonable
+        if len(participants) > 3:
+            return ", ".join(participants[:3]) + f" +{len(participants)-3}"
+        return ", ".join(participants)
+    
+    return None
+
 def convert_apple_time(apple_timestamp):
     """Convert Apple's timestamp format to readable datetime."""
     if apple_timestamp is None:
@@ -221,7 +258,15 @@ def export_messages(full_export=False):
         if display_name:
             conv_name = display_name
         elif chat_id:
+            # First try to look up as a contact (for 1:1 chats)
             conv_name = lookup_contact_name(chat_id)
+            # If we got back the same thing (no match), try getting group participants
+            if conv_name == chat_id or conv_name.startswith("chat"):
+                participants = get_chat_participants(chat_id, cursor)
+                if participants:
+                    conv_name = participants
+                else:
+                    conv_name = chat_id
         else:
             conv_name = get_contact_name(handle_id, cursor) if handle_id else "Unknown"
         
@@ -236,8 +281,11 @@ def export_messages(full_export=False):
         date_str = msg_datetime.strftime("%Y-%m-%d")
         time_str = msg_datetime.strftime("%H:%M")
         
-        # Determine sender
-        sender = "Me" if is_from_me else conv_name
+        # Determine sender - for group chats, get the actual sender's name
+        if is_from_me:
+            sender = "Me"
+        else:
+            sender = get_contact_name(handle_id, cursor) if handle_id else conv_name
         
         conversations[conv_name_clean][date_str].append({
             "time": time_str,
@@ -277,6 +325,183 @@ def export_messages(full_export=False):
     print(f"Exported {messages_written} messages from {len(conversations)} conversations.")
     conn.close()
 
+def export_ai_ready(full_export=False):
+    """Export messages to AI-ready JSON and CSV formats."""
+    
+    # Load contacts for name lookup
+    load_contacts()
+    
+    # Create output directory
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    
+    # Load state
+    state = load_state()
+    last_rowid = 0 if full_export else state.get("last_message_rowid", 0)
+    
+    # Connect to database
+    conn = sqlite3.connect(MESSAGES_DB)
+    cursor = conn.cursor()
+    
+    # Get messages with more metadata
+    query = """
+    SELECT 
+        message.ROWID,
+        message.text,
+        message.date,
+        message.is_from_me,
+        message.handle_id,
+        chat.chat_identifier,
+        chat.display_name,
+        chat.ROWID as chat_rowid
+    FROM message
+    LEFT JOIN chat_message_join ON message.ROWID = chat_message_join.message_id
+    LEFT JOIN chat ON chat_message_join.chat_id = chat.ROWID
+    WHERE message.ROWID > ?
+    ORDER BY message.date ASC
+    """
+    
+    cursor.execute(query, (last_rowid,))
+    messages = cursor.fetchall()
+    
+    if not messages:
+        print("No new messages to export.")
+        return
+    
+    # Build structured data
+    all_messages = []
+    conversations_meta = {}
+    
+    for row in messages:
+        rowid, text, date, is_from_me, handle_id, chat_id, display_name, chat_rowid = row
+        
+        if text is None:
+            continue
+        
+        # Get timestamp
+        msg_datetime = convert_apple_time(date)
+        if msg_datetime is None:
+            continue
+        
+        # Get conversation name
+        if display_name:
+            conv_name = display_name
+            conv_type = "group"
+        elif chat_id:
+            conv_name = lookup_contact_name(chat_id)
+            if conv_name == chat_id or conv_name.startswith("chat"):
+                participants = get_chat_participants(chat_id, cursor)
+                if participants:
+                    conv_name = participants
+                    conv_type = "group"
+                else:
+                    conv_name = chat_id
+                    conv_type = "unknown"
+            else:
+                conv_type = "direct"
+        else:
+            conv_name = get_contact_name(handle_id, cursor) if handle_id else "Unknown"
+            conv_type = "direct"
+        
+        # Get sender name
+        if is_from_me:
+            sender = "Me"
+        else:
+            sender = get_contact_name(handle_id, cursor) if handle_id else conv_name
+        
+        # Build message record
+        msg_record = {
+            "timestamp": msg_datetime.isoformat(),
+            "date": msg_datetime.strftime("%Y-%m-%d"),
+            "time": msg_datetime.strftime("%H:%M:%S"),
+            "year": msg_datetime.year,
+            "month": msg_datetime.month,
+            "day": msg_datetime.day,
+            "hour": msg_datetime.hour,
+            "day_of_week": msg_datetime.strftime("%A"),
+            "conversation": conv_name,
+            "conversation_type": conv_type,
+            "sender": sender,
+            "is_from_me": bool(is_from_me),
+            "text": text,
+            "char_count": len(text),
+            "word_count": len(text.split())
+        }
+        
+        all_messages.append(msg_record)
+        
+        # Track conversation metadata
+        if conv_name not in conversations_meta:
+            conversations_meta[conv_name] = {
+                "name": conv_name,
+                "type": conv_type,
+                "message_count": 0,
+                "first_message": msg_datetime.isoformat(),
+                "last_message": msg_datetime.isoformat()
+            }
+        conversations_meta[conv_name]["message_count"] += 1
+        conversations_meta[conv_name]["last_message"] = msg_datetime.isoformat()
+    
+    conn.close()
+    
+    # Write JSON
+    json_path = os.path.join(OUTPUT_DIR, "messages.json")
+    export_data = {
+        "export_date": datetime.now().isoformat(),
+        "total_messages": len(all_messages),
+        "total_conversations": len(conversations_meta),
+        "conversations": list(conversations_meta.values()),
+        "messages": all_messages
+    }
+    
+    with open(json_path, 'w') as f:
+        json.dump(export_data, f, indent=2)
+    
+    print(f"Created {json_path} ({len(all_messages)} messages)")
+    
+    # Write CSV
+    csv_path = os.path.join(OUTPUT_DIR, "messages.csv")
+    
+    if all_messages:
+        fieldnames = ["timestamp", "date", "time", "year", "month", "day", "hour", 
+                      "day_of_week", "conversation", "conversation_type", "sender", 
+                      "is_from_me", "text", "char_count", "word_count"]
+        
+        import csv
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(all_messages)
+        
+        print(f"Created {csv_path}")
+    
+    # Write a summary file for quick context
+    summary_path = os.path.join(OUTPUT_DIR, "SUMMARY.md")
+    with open(summary_path, 'w') as f:
+        f.write("# iMessage Export Summary\n\n")
+        f.write(f"**Export Date:** {datetime.now().strftime('%Y-%m-%d %H:%M')}\n")
+        f.write(f"**Total Messages:** {len(all_messages):,}\n")
+        f.write(f"**Total Conversations:** {len(conversations_meta)}\n\n")
+        
+        # Date range
+        if all_messages:
+            first_date = all_messages[0]["date"]
+            last_date = all_messages[-1]["date"]
+            f.write(f"**Date Range:** {first_date} to {last_date}\n\n")
+        
+        # Top conversations
+        f.write("## Top 20 Conversations (by message count)\n\n")
+        sorted_convos = sorted(conversations_meta.values(), key=lambda x: x["message_count"], reverse=True)[:20]
+        for conv in sorted_convos:
+            f.write(f"- **{conv['name']}**: {conv['message_count']:,} messages ({conv['type']})\n")
+        
+        f.write("\n## Files\n\n")
+        f.write("- `messages.json` — Full structured data for AI analysis\n")
+        f.write("- `messages.csv` — Tabular format for spreadsheets or analysis\n")
+        f.write("- `SUMMARY.md` — This file\n")
+        f.write("- Individual folders — Markdown files organized by contact and date\n")
+    
+    print(f"Created {summary_path}")
+
 def create_index(output_dir):
     """Create an index file listing all conversations and recent activity."""
     index_path = os.path.join(output_dir, "INDEX.md")
@@ -306,9 +531,17 @@ def main():
         print("Exporting new messages since last run...")
     
     try:
+        # Export markdown files (for human browsing)
         export_messages(full_export=full_export)
+        
+        # Export AI-ready JSON and CSV
+        print("\nCreating AI-ready exports...")
+        export_ai_ready(full_export=full_export)
+            
     except Exception as e:
         print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
         print("\nMake sure Terminal has Full Disk Access:")
         print("System Settings > Privacy & Security > Full Disk Access > Enable Terminal")
 
