@@ -2,29 +2,31 @@
 
 **"We have to push the button."**
 
-A Mac toolkit that forces iCloud Messages to sync, then exports your entire text message history to AI-ready formats. Named after Desmond Hume from *Lost*, who pushed the button every 108 minutes to save the world.
+A cross-platform toolkit that exports your text message history to AI-ready formats. Works with iMessage on Mac, iPhone backups on Windows, and Android SMS backups.
+
+Named after Desmond Hume from *Lost*, who pushed the button every 108 minutes to save the world.
 
 ---
 
-## What's Included
+## Platform Support
 
-**desmond.sh** — Forces iCloud Messages to sync by clicking "Sync Now" every 15 seconds. Automatically stops when sync is complete.
+| Platform | Data Source | Auto Sync | Script |
+|----------|-------------|-----------|--------|
+| **macOS (iMessage)** | Messages app (iCloud) | Yes | `imessage_exporter.py` |
+| **Windows (iPhone)** | iPhone backup (iTunes) | No | `imessage_exporter_windows.py` |
+| **Android** | SMS Backup & Restore app | No | `android_sms_exporter.py` |
 
-**imessage_exporter.py** — Exports your entire message history including:
-- Text messages
-- Photos, videos, audio messages
-- Reactions (loved, liked, laughed, etc.)
-- Special content (GamePigeon, Apple Pay, stickers, Digital Touch, etc.)
-- Message effects (sent with balloons, confetti, invisible ink, etc.)
-
-**Everything runs locally on your Mac. Nothing is uploaded anywhere.**
+**Everything runs locally. Nothing is uploaded anywhere.**
 
 ---
 
 ## What You Get
 
 ```
-~/Downloads/iMessages_Export/
+~/Downloads/iMessages_Export/      (Mac - iMessage)
+~/Documents/iMessages_Export/      (Windows - iPhone)
+~/Downloads/Android_SMS_Export/    (Mac - Android)
+~/Documents/Android_SMS_Export/    (Windows - Android)
 ├── messages.json               # Full structured data for AI analysis
 ├── messages.csv                # Tabular format for spreadsheets
 ├── SUMMARY.md                  # Stats, top conversations, content breakdown
@@ -53,47 +55,40 @@ Every message includes:
 | `text` | Message content or description |
 | `has_attachment` | true/false |
 | `attachment_types` | ["photo", "video", "audio", "file"] |
-| `reaction` | "loved", "liked", "laughed", etc. |
-| `special_content` | "GamePigeon game", "Apple Pay", etc. |
-| `effect` | "sent with balloons", "sent gently", etc. |
+| `reaction` | "loved", "liked", "laughed", etc. (iMessage only) |
+| `special_content` | "GamePigeon game", "Apple Pay", etc. (iMessage only) |
+| `effect` | "sent with balloons", "sent gently", etc. (iMessage only) |
 | `char_count`, `word_count` | For analysis |
 
 ---
 
-## Requirements
+## macOS Setup (iMessage)
 
-- macOS
-- Messages in iCloud enabled (iPhone and Mac)
-- Terminal with **Full Disk Access**
-- Terminal with **Accessibility** (for Desmond to click Sync Now)
-- Terminal with **Contacts** access (for name lookup)
+### Requirements
 
----
-
-## Setup
+- macOS with Messages app
+- Messages in iCloud enabled (on both iPhone and Mac)
+- Python 3 (pre-installed on macOS)
 
 ### 1. Grant Terminal Permissions
 
-Open **System Settings → Privacy & Security** and add Terminal to:
-- **Full Disk Access**
-- **Accessibility**
+Open **System Settings > Privacy & Security** and add Terminal to:
+- **Full Disk Access** (required)
+- **Accessibility** (for sync automation)
 
-For **Contacts** access, the permission screen may be blank until requested. Run this in Terminal to trigger the prompt:
+For **Contacts** access, run this in Terminal to trigger the permission prompt:
 
 ```bash
 osascript -e 'tell application "Contacts" to get name of first person'
 ```
 
-Click **OK** when the popup appears.
-
-Restart Terminal after granting permissions.
+Click **OK** when the popup appears. Restart Terminal after granting permissions.
 
 ### 2. Sync Your Messages (if needed)
 
 If your iCloud Messages sync keeps pausing:
 
 ```bash
-cd ~/Downloads
 chmod +x desmond.sh
 ./desmond.sh
 ```
@@ -127,29 +122,6 @@ Desmond will click Sync Now every 15 seconds and show your progress:
 python3 imessage_exporter.py --full
 ```
 
-Output:
-
-```
-Running full export of all messages...
-Loading contacts...
-Loaded 1,084 contact mappings.
-Exported 346,476 messages from 3,178 conversations.
-
-Creating AI-ready exports...
-
-Message breakdown:
-  • Text messages:      304,500
-  • Attachments only:   1,908
-  • Text + attachment:  X
-  • Reactions:          2,432
-  • Special/app:        37,636
-  • Total:              346,476
-
-Created messages.json
-Created messages.csv
-Created SUMMARY.md
-```
-
 ### 4. Automatic Exports (optional)
 
 To run exports hourly in the background:
@@ -158,6 +130,139 @@ To run exports hourly in the background:
 chmod +x setup_imessage_exporter.sh
 ./setup_imessage_exporter.sh
 ```
+
+---
+
+## Windows Setup (iPhone)
+
+### Requirements
+
+- Windows 10 or 11
+- Python 3 ([download here](https://www.python.org/downloads/))
+- iTunes (Windows 10) or Apple Devices app (Windows 11)
+- An **unencrypted** iPhone backup
+
+### 1. Install Python
+
+Download and install Python from [python.org](https://www.python.org/downloads/).
+
+**Important:** Check "Add Python to PATH" during installation.
+
+### 2. Create an iPhone Backup
+
+1. Connect your iPhone to your Windows PC
+2. Open iTunes (Windows 10) or Apple Devices (Windows 11)
+3. Select your device
+4. **Uncheck** "Encrypt local backup" (encrypted backups cannot be read)
+5. Click "Back Up Now"
+6. Wait for backup to complete
+
+### 3. Export Your Messages
+
+**Option A: Double-click**
+- Double-click `desmond_windows.bat`
+
+**Option B: Command line**
+```cmd
+python imessage_exporter_windows.py --full
+```
+
+The script will automatically find your most recent iPhone backup.
+
+### 4. Automatic Exports (optional)
+
+To run exports hourly using Windows Task Scheduler:
+
+1. Right-click `setup_windows.bat`
+2. Select "Run as administrator"
+3. Follow the prompts
+
+---
+
+## Android Setup (SMS/MMS)
+
+Works on both **Windows** and **macOS**.
+
+### Requirements
+
+- Android phone
+- "SMS Backup & Restore" app ([Google Play](https://play.google.com/store/apps/details?id=com.riteshsahu.SMSBackupRestore))
+- Python 3
+
+### 1. Install SMS Backup & Restore
+
+Download from Google Play Store:
+https://play.google.com/store/apps/details?id=com.riteshsahu.SMSBackupRestore
+
+### 2. Create a Backup
+
+1. Open "SMS Backup & Restore" on your Android phone
+2. Tap **Backup Now**
+3. Select **Messages** (and optionally **Call Logs**)
+4. Choose backup location:
+   - **Local storage** - then transfer the XML file to your computer
+   - **Google Drive** - then download the XML file to your computer
+5. Wait for backup to complete
+6. Transfer the `.xml` file to your computer (Downloads folder works best)
+
+### 3. Export Your Messages
+
+**On Windows:**
+```cmd
+# Double-click android_export_windows.bat
+# Or run:
+python android_sms_exporter.py
+```
+
+**On macOS:**
+```bash
+chmod +x android_export.sh
+./android_export.sh
+# Or run:
+python3 android_sms_exporter.py
+```
+
+**With a specific file:**
+```bash
+python3 android_sms_exporter.py --file "path/to/sms-backup.xml"
+```
+
+The script will automatically search common folders (Downloads, Documents, Desktop) for backup files.
+
+### What Gets Exported
+
+- All SMS text messages
+- MMS messages (including photo/video descriptions)
+- Call logs (if included in backup)
+- Contact names (if available in backup)
+
+---
+
+## Platform Comparison
+
+| Feature | macOS (iMessage) | Windows (iPhone) | Android |
+|---------|------------------|------------------|---------|
+| **Data source** | Live Messages DB | iPhone backup | SMS Backup XML |
+| **Sync automation** | Yes | No | No |
+| **Data freshness** | Real-time | As of last backup | As of last backup |
+| **Reactions** | Yes | Yes | No |
+| **Special content** | Yes (GamePigeon, etc.) | Yes | No |
+| **Message effects** | Yes | Yes | No |
+| **Call logs** | No | No | Yes (optional) |
+| **MMS/photos** | Metadata only | Metadata only | Metadata only |
+
+### Key Differences
+
+**iMessage (Mac/Windows)**
+- Rich message types: reactions, effects, games, Apple Pay
+- Group chat support with participant tracking
+- Requires Apple ecosystem (iPhone + Mac or iTunes)
+
+**Android SMS**
+- Standard SMS/MMS only (no special features)
+- Call log export included
+- Works with any Android phone
+- No root or special permissions needed
 
 ---
 
@@ -172,31 +277,116 @@ chmod +x setup_imessage_exporter.sh
 - "What time of day am I most active?"
 - "Show me my messaging patterns by day of week"
 - "Find all messages where I discussed [topic]"
-- "How often do I play GamePigeon with [person]?"
 - "What's the sentiment trend in my conversations with [person]?"
+- "Summarize my conversations with [person] over the last year"
 
 ---
 
 ## Message Types Explained
+
+### iMessage (Mac/Windows)
 
 | Type | What it captures |
 |------|------------------|
 | `text` | Regular text messages |
 | `attachment` | Photos, videos, audio messages, files (no text) |
 | `text_with_attachment` | Text message that also has media |
-| `reaction` | Tapback reactions (❤️ loved, 👍 liked, 😂 laughed, etc.) |
+| `reaction` | Tapback reactions (loved, liked, laughed, etc.) |
 | `special` | GamePigeon, Apple Pay, Digital Touch, stickers, handwriting, etc. |
+
+### Android
+
+| Type | What it captures |
+|------|------------------|
+| `text` | SMS text messages |
+| `attachment` | MMS with media (photo/video description) |
+| `text_with_attachment` | MMS with text and media |
 
 ---
 
-## Why Does iCloud Sync Keep Pausing?
+## Troubleshooting
 
-Apple prioritizes battery over sync speed. Large syncs stall unless:
-- Device is plugged in
-- Device is awake
-- You're actively babysitting it
+### macOS (iMessage)
 
-Desmond does the babysitting for you.
+**"No new messages to export"**
+- Make sure Terminal has Full Disk Access
+- Restart Terminal after granting permissions
+
+**Sync keeps pausing**
+- Keep your Mac plugged in and awake
+- Run `desmond.sh` to automate clicking Sync Now
+
+**Contact names not showing**
+- Grant Contacts access to Terminal
+- Run: `osascript -e 'tell application "Contacts" to get name of first person'`
+
+### Windows (iPhone)
+
+**"No iPhone backup found"**
+- Create a backup using iTunes or Apple Devices
+- Make sure backup is not encrypted
+
+**"Messages database not found in backup"**
+- Your backup is encrypted
+- Uncheck "Encrypt local backup" in iTunes/Apple Devices
+- Create a new backup
+
+**Python not found**
+- Reinstall Python with "Add Python to PATH" checked
+
+### Android
+
+**"No Android SMS backup files found"**
+- Make sure the XML backup file is in Downloads, Documents, or Desktop
+- Use `--file` flag to specify the exact path
+
+**"No messages found in backup file"**
+- The file might be corrupted or from a different app
+- This tool only works with "SMS Backup & Restore" app backups
+
+**Contact names showing as phone numbers**
+- The backup may not include contact names
+- Enable "Include contact names" in SMS Backup & Restore settings before backing up
+
+---
+
+## Privacy & Security
+
+- All processing happens locally on your computer
+- No data is uploaded anywhere
+- No network connections are made
+- Export files contain your complete message history — secure them appropriately
+
+---
+
+## Files Reference
+
+### macOS (iMessage)
+| File | Purpose |
+|------|---------|
+| `desmond.sh` | Automates iCloud Messages sync |
+| `imessage_exporter.py` | Exports messages from Mac |
+| `setup_imessage_exporter.sh` | Sets up hourly automatic exports |
+
+### Windows (iPhone)
+| File | Purpose |
+|------|---------|
+| `imessage_exporter_windows.py` | Exports messages from iPhone backup |
+| `desmond_windows.bat` | Easy launcher (double-click to run) |
+| `setup_windows.bat` | Sets up hourly automatic exports |
+
+### Android (both platforms)
+| File | Purpose |
+|------|---------|
+| `android_sms_exporter.py` | Exports messages from SMS Backup XML |
+| `android_export.sh` | macOS launcher |
+| `android_export_windows.bat` | Windows launcher |
+
+### Documentation
+| File | Purpose |
+|------|---------|
+| `README.md` | This file |
+| `PRODUCT_SPEC.md` | Detailed technical specification |
 
 ---
 
@@ -210,7 +400,7 @@ MIT — do whatever you want with it.
 
 If Desmond saved your sanity (and your messages):
 
-☕ [Patreon](https://www.patreon.com/c/christreadaway)
+[Patreon](https://www.patreon.com/c/christreadaway)
 
 ---
 
