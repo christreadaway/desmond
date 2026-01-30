@@ -8,6 +8,18 @@ Named after Desmond Hume from *Lost*, who pushed the button every 108 minutes to
 
 ---
 
+## Quick Start
+
+**Not sure where to begin?** Use our interactive setup guide:
+
+**[Open the Setup Guide →](https://christreadaway.github.io/desmond/)**
+
+Or open `index.html` locally in your browser.
+
+The guide will ask about your phone and computer, then show you exactly what to do.
+
+---
+
 ## Platform Support
 
 | Platform | Data Source | Auto Sync | Script |
@@ -387,6 +399,7 @@ The script will automatically search common folders (Downloads, Documents, Deskt
 |------|---------|
 | `README.md` | This file |
 | `PRODUCT_SPEC.md` | Detailed technical specification |
+| `index.html` | Interactive web-based setup guide |
 
 ---
 
